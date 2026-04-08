@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+config.toml
+*.log
+mapping.json
+.env
+dist/
+build/
+*.spec
