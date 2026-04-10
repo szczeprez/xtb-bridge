@@ -9,3 +9,6 @@ mapping.json
 dist/
 build/
 *.spec
+screenshots/
+cache/
+xtb_browser_data/

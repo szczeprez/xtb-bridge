@@ -30,14 +30,14 @@ MT5 Terminal              Bridge App (PyQt6)           xStation5 Web (Browser)
 ### 1. Clone or download the project
 
 ```bash
-cd C:\Projekty\xtb-bridge
+cd /c/Projekty/xtb-bridge
 ```
 
 ### 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/Scripts/activate
 ```
 
 ### 3. Install dependencies
@@ -57,7 +57,7 @@ playwright install chromium
 Copy the example config and fill in your credentials:
 
 ```bash
-copy config.example.toml config.toml
+cp config.example.toml config.toml
 ```
 
 Edit `config.toml` with your settings:
@@ -94,8 +94,8 @@ Open the MT5 terminal and log in to your Stratus Bora account. The terminal must
 ### 2. Activate the virtual environment
 
 ```bash
-cd C:\Projekty\xtb-bridge
-.venv\Scripts\activate
+cd /c/Projekty/xtb-bridge
+source .venv/Scripts/activate
 ```
 
 ### 3. Launch XTB Bridge

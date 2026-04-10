@@ -66,56 +66,46 @@ class XTBWeb:
         self._log("Navigating to xStation5...")
         await self._page.goto("https://xstation5.xtb.com", timeout=NAV_TIMEOUT_MS)
 
-        # Wait for the login form to appear
-        # xStation5 login page has email and password fields
-        # Selectors may need adjustment based on actual DOM structure
         try:
-            # Try to detect if already logged in (main trading view present)
+            # Detect login page by looking for a submit/login button
+            # (the trading UI never has these — most reliable indicator)
+            submit_btn = self._page.locator(
+                "button[type='submit'], button:has-text('Log in'), "
+                "button:has-text('Zaloguj'), button:has-text('Sign in'), "
+                "input[type='submit']"
+            ).first
+
             try:
-                await self._page.wait_for_selector(
-                    "[class*='market-watch'], [class*='trading'], [class*='workspace']",
-                    timeout=5000,
-                )
+                await submit_btn.wait_for(state="visible", timeout=15000)
+            except Exception:
+                # No login button found — already logged in
                 self._logged_in = True
                 self._log("Already logged in (session restored)")
                 return True
-            except Exception:
-                pass  # Not logged in yet, proceed with login
 
-            self._log("Waiting for login form...")
+            self._log("Login form detected, filling credentials...")
 
-            # Look for email/login input field
+            # Fill email
             email_input = self._page.locator(
                 "input[type='email'], input[name='email'], "
                 "input[type='text'][name*='login'], input[type='text'][name*='user'], "
                 "input[placeholder*='email' i], input[placeholder*='login' i], "
                 "input[placeholder*='ID' i]"
             ).first
-            await email_input.wait_for(timeout=LOGIN_TIMEOUT_MS)
             await email_input.fill(self._email)
 
-            # Look for password input
+            # Fill password
             password_input = self._page.locator("input[type='password']").first
             await password_input.fill(self._password)
 
             # Click login/submit button
-            submit_btn = self._page.locator(
-                "button[type='submit'], button:has-text('Log in'), "
-                "button:has-text('Zaloguj'), button:has-text('Sign in'), "
-                "input[type='submit']"
-            ).first
             await submit_btn.click()
 
             self._log("Credentials submitted. Waiting for main view...")
             self._log("(Handle CAPTCHA/2FA in the browser window if prompted)")
 
-            # Wait for the main trading interface to load
-            # This is a generous timeout because user may need to handle 2FA
-            await self._page.wait_for_selector(
-                "[class*='market-watch'], [class*='trading'], [class*='workspace'], "
-                "[class*='instrument'], [class*='chart']",
-                timeout=LOGIN_TIMEOUT_MS,
-            )
+            # Wait for login button to disappear (trading view loaded)
+            await submit_btn.wait_for(state="hidden", timeout=LOGIN_TIMEOUT_MS)
             self._logged_in = True
             self._log("Login successful")
             return True
@@ -148,49 +138,63 @@ class XTBWeb:
         try:
             self._log(f"Opening {direction.value} {symbol} {volume} lots...")
 
-            # Step 1: Search for the instrument
-            # Look for the instrument search / market watch input
-            search_input = self._page.locator(
-                "input[placeholder*='search' i], input[placeholder*='szukaj' i], "
-                "input[placeholder*='instrument' i], input[class*='search' i]"
-            ).first
-            await search_input.click(timeout=ACTION_TIMEOUT_MS)
-            await search_input.fill("")
-            await search_input.fill(symbol)
-            await self._page.wait_for_timeout(1000)  # Wait for search results
+            # Step 1: Navigate to the instrument
+            # Take debug screenshot to see current state
+            await self._screenshot(f"before_trade_{symbol}")
 
-            # Click on the instrument from search results
-            result = self._page.locator(
-                f"[class*='search-result'] :text-is('{symbol}'), "
-                f"[class*='instrument'] :text-is('{symbol}'), "
-                f"tr:has-text('{symbol}'), "
-                f"div:has-text('{symbol}')"
-            ).first
-            await result.click(timeout=ACTION_TIMEOUT_MS)
+            # Clamp volume to xStation5 allowed range
+            volume = max(0.01, min(350.0, round(volume, 2)))
+
+            # Click on the instrument tab if already open, or find it in market watch
+            tab = self._page.locator(f"span.chart-symbol-label:has-text('{symbol}')").first
+            try:
+                await tab.click(timeout=3000)
+                self._log(f"Switched to existing tab for {symbol}")
+            except Exception:
+                # No tab open — search for instrument in market watch
+                self._log(f"No tab for {symbol}, searching in market watch...")
+                # Look for search input — exclude indicator search ("Dodaj wskaźnik")
+                search_input = self._page.locator(
+                    "input[placeholder*='search' i], input[placeholder*='szukaj' i], "
+                    "input[placeholder*='instrument' i]"
+                ).first
+                await search_input.click(timeout=ACTION_TIMEOUT_MS)
+                await search_input.fill("")
+                await search_input.fill(symbol)
+                await self._page.wait_for_timeout(1000)
+
+                # Click on the instrument from search results
+                result = self._page.locator(
+                    f"[class*='search-result'] :text-is('{symbol}'), "
+                    f"[class*='instrument'] :text-is('{symbol}'), "
+                    f"tr:has-text('{symbol}'), "
+                    f"div:has-text('{symbol}')"
+                ).first
+                await result.click(timeout=ACTION_TIMEOUT_MS)
+
             await self._page.wait_for_timeout(500)
 
-            # Step 2: Set the volume
-            volume_input = self._page.locator(
-                "input[class*='volume' i], input[class*='lot' i], "
-                "input[class*='quantity' i], input[name*='volume' i]"
-            ).first
+            # Step 2: Set the volume in the click-trading bar
+            self._log(f"Setting volume to {volume}...")
+            volume_input = self._page.locator("input.xs-stepper-input").first
             await volume_input.click(timeout=ACTION_TIMEOUT_MS)
-            await volume_input.fill("")
-            await volume_input.fill(str(round(volume, 2)))
+            await volume_input.click(click_count=3)
+            await volume_input.press("Backspace")
+            await volume_input.type(str(round(volume, 2)), delay=50)
+            self._log("Volume set")
 
-            # Step 3: Click BUY or SELL
+            # Step 3: Click the price button (green=BUY/ask, red=SELL/bid)
             if direction == Direction.BUY:
-                btn = self._page.locator(
-                    "button:has-text('BUY'), button:has-text('Kup'), "
-                    "button[class*='buy' i], div[class*='buy' i] button"
-                ).first
+                btn = self._page.locator(".xs-btn-buy").first
             else:
-                btn = self._page.locator(
-                    "button:has-text('SELL'), button:has-text('Sprzedaj'), "
-                    "button[class*='sell' i], div[class*='sell' i] button"
-                ).first
+                btn = self._page.locator(".xs-btn-sell").first
+
+            await self._screenshot(f"before_click_{direction.value}_{symbol}")
+            self._log(f"Clicking {direction.value} button...")
             await btn.click(timeout=ACTION_TIMEOUT_MS)
-            await self._page.wait_for_timeout(1000)
+            self._log(f"{direction.value} button clicked")
+            await self._page.wait_for_timeout(2000)
+            await self._screenshot(f"after_click_{direction.value}_{symbol}")
 
             # Step 4: Confirm the trade if a confirmation dialog appears
             try:
@@ -199,6 +203,7 @@ class XTBWeb:
                     "button:has-text('OK'), button:has-text('Accept')"
                 ).first
                 await confirm.click(timeout=3000)
+                self._log("Confirmation dialog accepted")
             except Exception:
                 pass  # No confirmation dialog
 
@@ -212,12 +217,34 @@ class XTBWeb:
             except Exception:
                 pass
 
+            # Step 6: Verify the trade actually opened
+            await self._page.wait_for_timeout(1500)
+            no_positions = await self._has_no_open_positions()
+            self._log(f"Position check — empty: {no_positions}")
+            if no_positions:
+                self._log("Trade not confirmed — retrying click...")
+                await self._screenshot(f"retry_trade_{symbol}")
+                await btn.click(timeout=ACTION_TIMEOUT_MS)
+                await self._page.wait_for_timeout(2000)
+                await self._screenshot(f"after_retry_{symbol}")
+
             self._log(f"Trade opened: {direction.value} {symbol} {volume} lots")
             return True
 
         except Exception as e:
             self._log(f"Failed to open trade {direction.value} {symbol}: {e}")
             await self._screenshot(f"open_error_{symbol}")
+            return False
+
+    async def _has_no_open_positions(self) -> bool:
+        """Check if xStation5 shows the 'no open positions' empty state."""
+        try:
+            empty = self._page.locator(
+                "xs6-open-positions-feature .empty-page, "
+                "xs6-open-positions-feature app-empty-page"
+            )
+            return await empty.count() > 0 and await empty.first.is_visible()
+        except Exception:
             return False
 
     async def close_trade(self, symbol: str, direction: Direction) -> bool:
