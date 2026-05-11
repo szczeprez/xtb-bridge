@@ -8,7 +8,7 @@ password = ""
 account_type = "demo"  # "real" or "demo"
 
 [bridge]
-pairs = ["EURUSD", "GBPUSD", "GOLD"]
+pairs = ["EURUSD", "USDCAD", "GBPCHF", "AUDUSD", "EURAUD", "GBPUSD"]
 lot_ratio = 0.5
 poll_interval_ms = 500
 reverse_mode = false
@@ -16,5 +16,8 @@ reverse_mode = false
 [symbols]
 # MT5 symbol = XTB symbol
 EURUSD = "EURUSD"
+USDCAD = "USDCAD"
+GBPCHF = "GBPCHF"
+AUDUSD = "AUDUSD"
+EURAUD = "EURAUD"
 GBPUSD = "GBPUSD"
-GOLD = "XAUUSD"

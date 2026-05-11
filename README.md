@@ -125,10 +125,27 @@ python -m xtb_bridge.main
 | `xtb.password` | *(required)* | Your XTB account password |
 | `xtb.account_type` | `demo` | `"demo"` or `"real"` |
 | `bridge.pairs` | `["EURUSD", "GBPUSD", "GOLD"]` | MT5 symbols to monitor |
-| `bridge.lot_ratio` | `0.5` | Multiplier: MT5 lots x ratio = XTB lots |
+| `bridge.lot_ratio` | `0.5` | Default lot size for all symbols |
 | `bridge.poll_interval_ms` | `500` | How often to check MT5 (milliseconds) |
 | `bridge.reverse_mode` | `false` | Flip direction: BUY becomes SELL |
 | `symbols.*` | — | Maps MT5 symbol names to XTB symbol names |
+| `lots.*` | *(optional)* | Per-symbol lot size override (see below) |
+
+### Per-symbol lot sizes
+
+Add a `[lots]` section to override `lot_ratio` for specific instruments:
+
+```toml
+[bridge]
+lot_ratio = 0.04   # default for all symbols
+
+[lots]
+EURUSD = 0.02      # override for EURUSD only
+GBPUSD = 0.01      # override for GBPUSD only
+# symbols not listed here use the lot_ratio default
+```
+
+Changes to `lot_ratio` made in the GUI are saved back to `config.toml` automatically.
 
 ## Project Structure
 
@@ -147,12 +164,92 @@ xtb-bridge/
 │       ├── main_window.py   # Main application window
 │       ├── trade_table.py   # Positions table widget
 │       └── log_widget.py    # Color-coded event log widget
-├── config.example.toml      # Template config (safe to commit)
+├── run.py                   # Launcher used by the packaged .exe
+├── xtb_bridge.spec          # PyInstaller build spec
+├── build.py                 # Build script — produces dist/xtb_bridge/
 ├── config.toml              # Your config with credentials (gitignored)
 ├── requirements.txt         # Python dependencies
-├── mapping.json             # Auto-generated: tracks MT5↔XTB position mapping
-├── xtb_bridge.log           # Auto-generated: application log file
+├── mapping.json             # Auto-generated: MT5↔XTB position mapping
+├── position_ids.json        # Auto-generated: exact XTB position IDs per ticket
+├── xtb_bridge.log           # Auto-generated: rotating log (max 5 MB × 3 backups)
 └── .gitignore
+```
+
+## Building a Standalone Windows Executable
+
+The `build.py` script packages the application into a self-contained folder that can be copied to any Windows machine — no Python installation required on the target.
+
+### Prerequisites (build machine only)
+
+- Python 3.11+ with the project venv active
+- Playwright Chromium already installed (`playwright install chromium`)
+- Internet access to download PyInstaller on first run
+
+### Run the build
+
+```bash
+# activate the venv first
+.venv\Scripts\activate
+
+python build.py
+```
+
+The script will:
+
+1. Install **PyInstaller ≥ 6.12** if not present
+2. Bundle Python, all dependencies, and the Playwright Node.js driver via `xtb_bridge.spec`
+3. Copy the local **Chromium** browser (~393 MB) into `dist/xtb_bridge/_playwright_browsers/`
+4. Copy `config.toml` and write a `start.bat` launcher
+5. Produce a zip archive at `dist/xtb_bridge_windows.zip`
+
+To skip the zip step:
+
+```bash
+python build.py --no-zip
+```
+
+### Distribution layout
+
+```
+dist/xtb_bridge/
+├── xtb_bridge.exe              ← double-click to launch (or use start.bat)
+├── start.bat                   ← alternative launcher
+├── config.toml                 ← edit with XTB credentials before running
+├── README.txt                  ← end-user instructions
+├── _internal/                  ← Python runtime + all libraries (~249 MB)
+│   └── playwright/driver/      ← Node.js Playwright driver
+└── _playwright_browsers/       ← Chromium browser (~393 MB)
+    └── chromium-XXXX/
+```
+
+Total size: **~650 MB** uncompressed, **~400 MB** zipped.
+
+### Installing on the target machine
+
+1. Copy and unzip `xtb_bridge_windows.zip` to any folder
+2. Edit `config.toml` with the XTB account credentials
+3. Start MetaTrader 5 and log in
+4. Double-click `xtb_bridge.exe`
+
+**Windows SmartScreen** will show a warning on the first launch because the exe is unsigned. Click **"More info" → "Run anyway"** to proceed.
+
+> The target machine must have **MetaTrader 5 terminal** installed — the bridge communicates with it via a local socket (`MetaTrader5` Python package requirement).
+
+### Rebuilding after code changes
+
+```bash
+python build.py
+```
+
+PyInstaller detects changed files automatically. The Chromium copy step is skipped if `_playwright_browsers/` already exists in `dist/xtb_bridge/`.
+
+### Updating the Chromium version
+
+If you run `playwright install chromium` and get a newer version, delete the old browsers folder before rebuilding:
+
+```bash
+Remove-Item -Recurse -Force dist\xtb_bridge\_playwright_browsers
+python build.py
 ```
 
 ## Troubleshooting

@@ -53,8 +53,8 @@ def get_open_positions(symbols: list[str]) -> dict[int, Position]:
             direction=direction,
             volume=p.volume,
             open_price=p.price_open,
-            sl=p.sl,
-            tp=p.tp,
+            open_time=int(p.time),
+            profit=float(p.profit),
         )
 
     return positions

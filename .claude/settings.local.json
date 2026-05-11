@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Projekty/return-app/**)",
+      "Bash(npx eslint *)",
+      "Bash(node -e \"const r=require\\('C:/Projekty/return-app/.lint-baseline.json'\\);const byFile={};let total=0;for\\(const f of r\\){const a=\\(f.messages||[]\\).filter\\(m=>m.ruleId==='@typescript-eslint/no-explicit-any'\\);if\\(a.length\\){byFile[f.filePath]=a.length;total+=a.length;}}console.log\\('TOTAL any:',total\\);console.log\\('FILES:',Object.keys\\(byFile\\).length\\);const sorted=Object.entries\\(byFile\\).sort\\(\\(a,b\\)=>b[1]-a[1]\\).slice\\(0,15\\);for\\(const [f,c] of sorted\\)console.log\\(c.toString\\(\\).padStart\\(3\\),f.replace\\(/.*return-app[\\\\\\\\\\\\\\\\/]/,''\\)\\);\")",
+      "Bash(node -e ' *)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

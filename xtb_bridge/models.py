@@ -37,8 +37,8 @@ class Position:
     direction: Direction
     volume: float
     open_price: float = 0.0
-    sl: float = 0.0
-    tp: float = 0.0
+    open_time: int = 0    # Unix timestamp from MT5
+    profit: float = 0.0   # Unrealized P&L from MT5
 
     def to_dict(self) -> dict:
         return {
@@ -47,8 +47,8 @@ class Position:
             "direction": self.direction.value,
             "volume": self.volume,
             "open_price": self.open_price,
-            "sl": self.sl,
-            "tp": self.tp,
+            "open_time": self.open_time,
+            "profit": self.profit,
         }
 
     @classmethod
@@ -59,8 +59,8 @@ class Position:
             direction=Direction(data["direction"]),
             volume=data["volume"],
             open_price=data.get("open_price", 0.0),
-            sl=data.get("sl", 0.0),
-            tp=data.get("tp", 0.0),
+            open_time=data.get("open_time", 0),
+            profit=data.get("profit", 0.0),
         )
 
 
@@ -91,6 +91,9 @@ class TicketMapping:
 
     def has(self, mt5_ticket: int) -> bool:
         return mt5_ticket in self._map
+
+    def tickets(self) -> list[int]:
+        return list(self._map.keys())
 
     def to_dict(self) -> dict[str, int]:
         return {str(k): v for k, v in self._map.items()}
